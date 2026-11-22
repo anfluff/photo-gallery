@@ -70,6 +70,18 @@ const PLACE_KEY = 'gallery-place';
 /** Marks a remembered position that belongs to the grid that ends, not to the endless mesh. */
 const LIST_MARK = 'list:';
 
+/** Two fingers on the mesh. They zoom it by moving apart or together, and move it by moving along. */
+interface Pinch {
+  /** Where each of the two fingers is now, by pointer id. */
+  points: Map<number, { x: number; y: number }>;
+  /** How far apart the fingers were at the start, and the zoom then. */
+  startSpan: number;
+  startZoom: number;
+  /** The spot of the mesh that was between the fingers at the start, in cells. It stays between them. */
+  col: number;
+  row: number;
+}
+
 const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n));
 
 export class Grid {
@@ -87,6 +99,13 @@ export class Grid {
   decorate: ((cell: HTMLElement) => void) | null = null;
   /** When set, every photo gets a row of hearts. Admin mode sets it. */
   likes: Likes | null = null;
+  /**
+   * How far the mesh zooms out. At 0.5 the cells are half as large, so a window
+   * shows twice as many rows. Admin mode goes further.
+   */
+  minZoom = 0.5;
+  /** Runs when a pinch or the wheel has changed the zoom. */
+  onZoom: (() => void) | null = null;
   /** Space kept free above the first row of a bounded mesh. Admin mode has its bar there. */
   topPad = 0;
   /** Space kept free below the last row of a bounded mesh. Admin mode has its settings panel there. */
@@ -112,6 +131,9 @@ export class Grid {
   private vy = 0;
   private coasting = false;
   private drag: Drag | null = null;
+  private pinch: Pinch | null = null;
+  /** The zoom at the start of a pinch on a trackpad in Safari. */
+  private gestureZoom = 1;
   /** Distance a glide still has to cover. */
   private remX = 0;
   private remY = 0;
@@ -337,10 +359,47 @@ export class Grid {
     return this.zoom;
   }
 
-  /** Scales the cells. Admin mode zooms out to see more of the mesh at once. */
+  /** Scales the cells. 1 is the full size, and a smaller number shows more of the mesh at once. */
   setZoom(zoom: number): void {
-    this.zoom = clamp(zoom, 0.25, 1);
+    this.zoom = clamp(zoom, this.minZoom, 1);
     this.relayout();
+  }
+
+  /**
+   * Zooms so that a spot of the mesh, given in cells, ends up at a point of the
+   * screen. The cells on screen change size in place, so a pinch does not load
+   * or fade them in again.
+   */
+  private zoomAbout(zoom: number, col: number, row: number, x: number, y: number): void {
+    const to = clamp(zoom, this.minZoom, 1);
+    if (to !== this.zoom) {
+      this.zoom = to;
+      this.measure();
+      for (const [key, el] of this.live) {
+        const [c, r] = key.split(':').map(Number);
+        el.style.width = `${this.cellW}px`;
+        el.style.height = `${this.cellH}px`;
+        this.place(el, c, r);
+      }
+      this.onZoom?.();
+    }
+    this.camX = col * this.stepX - x;
+    this.camY = row * this.stepY - y;
+    this.invalidate();
+  }
+
+  /** Zooms while the spot of the mesh under a point of the screen stays under it. */
+  private zoomAt(zoom: number, x: number, y: number): void {
+    // A grid that ends lays its rows out again for the new cell size.
+    if (this.mesh.bounded) {
+      const before = this.zoom;
+      this.setZoom(zoom);
+      if (this.zoom !== before) this.onZoom?.();
+      return;
+    }
+    this.settle();
+    this.coasting = false;
+    this.zoomAbout(zoom, (this.camX + x) / this.stepX, (this.camY + y) / this.stepY, x, y);
   }
 
   getSize(): number {
@@ -502,6 +561,9 @@ export class Grid {
     vp.addEventListener('pointerup', this.onPointerUp);
     vp.addEventListener('pointercancel', this.onPointerCancel);
     vp.addEventListener('wheel', this.onWheel, { passive: false });
+    // Safari reports a pinch on a trackpad with events of its own.
+    vp.addEventListener('gesturestart', this.onGesture);
+    vp.addEventListener('gesturechange', this.onGesture);
     vp.addEventListener('dragstart', (e) => e.preventDefault());
     vp.addEventListener('click', this.onClick);
     window.addEventListener('keydown', this.onKeyDown);
@@ -521,7 +583,12 @@ export class Grid {
   };
 
   private onPointerDown = (e: PointerEvent): void => {
-    if (this.locked || this.drag || e.button !== 0) return;
+    if (this.locked || e.button !== 0) return;
+    if (this.drag) {
+      // A second finger turns the drag into a pinch.
+      if (!this.pinch && e.pointerType === 'touch' && !this.mesh.bounded) this.startPinch(e);
+      return;
+    }
     // A press on a control inside a cell is that control's click, not the start of a pan.
     if (e.target instanceof Element && e.target.closest('button, .likes')) return;
     this.coasting = false;
@@ -538,7 +605,58 @@ export class Grid {
     };
   };
 
+  private startPinch(e: PointerEvent): void {
+    const d = this.drag!;
+    // The first finger no longer taps a photo.
+    d.moved = true;
+    this.viewport.classList.add('dragging');
+    this.settle();
+    this.coasting = false;
+    this.viewport.setPointerCapture(e.pointerId);
+    const a = { x: d.lastX, y: d.lastY };
+    const b = { x: e.clientX, y: e.clientY };
+    this.pinch = {
+      points: new Map([
+        [d.pointerId, a],
+        [e.pointerId, b],
+      ]),
+      startSpan: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
+      startZoom: this.zoom,
+      col: (this.camX + (a.x + b.x) / 2) / this.stepX,
+      row: (this.camY + (a.y + b.y) / 2) / this.stepY,
+    };
+    this.onPan?.();
+  }
+
+  private movePinch(e: PointerEvent): void {
+    const p = this.pinch!;
+    const point = p.points.get(e.pointerId);
+    if (!point) return;
+    point.x = e.clientX;
+    point.y = e.clientY;
+    const [a, b] = [...p.points.values()];
+    const span = Math.hypot(b.x - a.x, b.y - a.y);
+    this.zoomAbout((p.startZoom * span) / p.startSpan, p.col, p.row, (a.x + b.x) / 2, (a.y + b.y) / 2);
+  }
+
+  /** One of the two fingers has left. The other one carries on as a drag. */
+  private endPinch(e: PointerEvent): void {
+    const p = this.pinch!;
+    if (!p.points.has(e.pointerId)) return;
+    this.pinch = null;
+    if (this.viewport.hasPointerCapture(e.pointerId)) this.viewport.releasePointerCapture(e.pointerId);
+    p.points.delete(e.pointerId);
+    const [id, at] = [...p.points.entries()][0];
+    const d = this.drag!;
+    d.pointerId = id;
+    d.lastX = at.x;
+    d.lastY = at.y;
+    // The drag starts over, so the mesh does not glide on at the speed of the pinch.
+    d.samples = [{ t: e.timeStamp, x: at.x, y: at.y }];
+  }
+
   private onPointerMove = (e: PointerEvent): void => {
+    if (this.pinch) return this.movePinch(e);
     const d = this.drag;
     if (!d || e.pointerId !== d.pointerId) return;
     const slop = e.pointerType === 'mouse' ? CLICK_SLOP : TAP_SLOP;
@@ -557,6 +675,7 @@ export class Grid {
   };
 
   private onPointerUp = (e: PointerEvent): void => {
+    if (this.pinch) return this.endPinch(e);
     const d = this.drag;
     if (!d || e.pointerId !== d.pointerId) return;
     this.endDrag();
@@ -576,6 +695,7 @@ export class Grid {
   };
 
   private onPointerCancel = (e: PointerEvent): void => {
+    if (this.pinch) return this.endPinch(e);
     if (this.drag && e.pointerId === this.drag.pointerId) this.endDrag();
   };
 
@@ -589,13 +709,28 @@ export class Grid {
   }
 
   private onWheel = (e: WheelEvent): void => {
-    if (e.ctrlKey) return; // pinch zoom stays with the browser
     e.preventDefault();
     if (this.locked) return;
     const unit = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+    // A pinch on a trackpad arrives as a wheel event with the Ctrl key down. So does the wheel with Ctrl held.
+    if (e.ctrlKey) {
+      // One notch of a mouse wheel is 100 or more, which would zoom all the way at once.
+      const turn = clamp(e.deltaY * unit, -30, 30);
+      this.zoomAt(this.zoom * Math.exp(-turn / 100), e.clientX, e.clientY);
+      return;
+    }
     this.coasting = false;
     this.panBy(e.deltaX * unit, e.deltaY * unit);
     this.onPan?.();
+  };
+
+  private onGesture = (e: Event): void => {
+    e.preventDefault();
+    // On a touch screen the two fingers are pointers, and the pinch above handles them.
+    if (this.locked || this.drag || this.pinch) return;
+    const g = e as Event & { scale: number; clientX: number; clientY: number };
+    if (e.type === 'gesturestart') this.gestureZoom = this.zoom;
+    else this.zoomAt(this.gestureZoom * g.scale, g.clientX, g.clientY);
   };
 
   private onKeyDown = (e: KeyboardEvent): void => {

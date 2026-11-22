@@ -2,6 +2,8 @@
 
 My fav photos, laid out on an endless mesh. Drag to move around, click a photo to open it, and use the arrow keys to move between open photos. On a touch screen, swipe the open photo left, right, up or down.
 
+The mesh zooms out to half size, which shows twice as many rows: four on a laptop and two on a phone. Pinch on a touch screen or a trackpad, or turn the mouse wheel with Ctrl held. The page opens at full size.
+
 While you move, the address of the page keeps your position, like `#12.35,-4.2`. Send that address to someone and the mesh opens at the same spot for them. The two numbers count cells from the middle of the mesh, so the link works on a screen of any size. It points at a spot, not at a photo: after photos are added, removed or liked differently, other photos lie there.
 
 On the mesh every photo is cropped around its centre to fill a 2:3 cell. The opened photo is shown whole.
@@ -53,7 +55,7 @@ Open http://localhost:5173/?admin while `npm run dev` is running. The bar at the
 - Every removal shows a chip in the bottom left corner for a few seconds. Its Undo button brings that photo back.
 - The panel in the bottom right corner sets the look of the mesh. Size is how large the photos are, from 50% to 200% of the size the window gives them. At 100% a window shows two rows in full and a part of the rows above and below. A phone shows one photo with a part of its neighbours when held upright, and one row when on its side. A cell is at most 320 px wide, so a large display shows more rows. Spacing is the space between photos, and Radius is how round their corners are. Both are a share of the photo width, so they look the same on every screen size. Hover picks what a photo does under the pointer: Lift, Zoom, Spotlight, Ring or Press. Background is the colour behind the photos.
 - While Move photos is on, pan with the trackpad, by dragging the space between photos, or by holding Space while dragging.
-- The minus and plus buttons zoom out and in.
+- The minus and plus buttons zoom out and in. Admin mode zooms out to a quarter of the size, further than the public page.
 - Undo is the Z key or Cmd+Z and covers moves and removals. Revert goes back to the last save. Save is Cmd+S or the Save button.
 
 A removed photo leaves an empty cell until the next save. Save writes the order, the size, the spacing, the radius, the hover effect, the background colour and the list of removed photos to `src/gallery.json`, and lays the mesh out again without the empty cells. Each row closes its gaps towards the middle column, and the photos of the other rows stay where they are. A removed photo with likes also makes one photo of each lower count of likes jump inwards, so that the most liked photos keep the middle. The photos furthest from the middle, where the mesh repeats, can get new neighbours. Commit that file to keep it. Admin mode, likes included, is part of the dev server only and is not in the production build.

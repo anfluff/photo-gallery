@@ -638,6 +638,9 @@ export function initAdmin(grid: Grid, mesh: Mesh, fileOrder: string[]): Admin {
   document.getElementById('hint')?.remove();
   grid.showEmpty = true;
   grid.likes = likes;
+  // Admin mode zooms out further than the public page, to see more of the mesh at once.
+  grid.minZoom = 0.25;
+  grid.onZoom = update;
   placeSort();
   grid.bottomPad = PANEL_SPACE;
   grid.refresh();
