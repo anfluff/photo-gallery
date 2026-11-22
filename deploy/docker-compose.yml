@@ -33,6 +33,14 @@ services:
       traefik.http.routers.apraksin_budget.tls.certresolver: doDNSChallenge
       traefik.http.routers.apraksin_budget.middlewares: hstsHeader@file,secHeader@file
       traefik.http.routers.apraksin_budget.service: apraksin_web
+      # Plain http goes to https. The proxy has a rule for that for every
+      # site, but it is written for Traefik 2 and does not match in Traefik 3.
+      traefik.http.middlewares.apraksin_https.redirectscheme.scheme: https
+      traefik.http.middlewares.apraksin_https.redirectscheme.permanent: "true"
+      traefik.http.routers.apraksin_http.rule: Host(`photos.apraksin.xyz`) || Host(`budget.apraksin.xyz`)
+      traefik.http.routers.apraksin_http.entrypoints: web
+      traefik.http.routers.apraksin_http.middlewares: apraksin_https
+      traefik.http.routers.apraksin_http.service: apraksin_web
 
 networks:
   hemagon_network:
