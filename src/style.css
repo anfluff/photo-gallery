@@ -297,6 +297,12 @@ body {
   inset: 0;
   z-index: 10;
   cursor: zoom-out;
+  /* Like the mesh, the overlay gets every touch itself. Otherwise the browser
+     takes a tap that moves a little for a scroll or a zoom, and the tap never
+     closes the photo. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .lightbox .backdrop {

@@ -62,7 +62,8 @@ interface Drag {
   samples: { t: number; x: number; y: number }[];
 }
 
-const CLICK_SLOP = 5; // px a pointer may travel and still count as a click
+const CLICK_SLOP = 5; // px a mouse may travel and still count as a click
+const TAP_SLOP = 10; // the same for a finger or a pen, which are less steady
 const COAST_MS = 325; // time constant of the glide after a drag
 const MAX_SPEED = 6; // px per ms
 const PLACE_KEY = 'gallery-place';
@@ -540,7 +541,8 @@ export class Grid {
   private onPointerMove = (e: PointerEvent): void => {
     const d = this.drag;
     if (!d || e.pointerId !== d.pointerId) return;
-    if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > CLICK_SLOP) {
+    const slop = e.pointerType === 'mouse' ? CLICK_SLOP : TAP_SLOP;
+    if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > slop) {
       d.moved = true;
       this.viewport.classList.add('dragging');
     }

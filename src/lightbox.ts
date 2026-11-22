@@ -46,6 +46,7 @@ const EASE_OUT = 'cubic-bezier(0.16, 1, 0.3, 1)';
 const FLY_IN = { duration: 520, easing: EASE_OUT };
 const FLY_OUT = { duration: 380, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' };
 const SLIDE = 70; // px a photo travels when an arrow key swaps it
+const TAP_SLOP = 10; // px a pointer may travel between going down and coming up and still close the photo
 
 const ARROWS: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
@@ -182,8 +183,7 @@ export function openLightbox(options: Options): Lightbox {
     if (more && !still) hearts.animate([{ scale: 1 }, { scale: 1.2 }, { scale: 1 }], { duration: 320, easing: EASE_OUT });
   };
   hearts.addEventListener('click', (e) => {
-    // A click anywhere else in the overlay closes it.
-    e.stopPropagation();
+    if (strayClick(e)) return;
     const to = pickedLikes(e.target, likes?.of(shot.id) ?? 0);
     if (to !== null) setLike(to);
   });
@@ -241,9 +241,7 @@ export function openLightbox(options: Options): Lightbox {
     if (next) swapTo(next.shot, next.dx, next.dy, true);
   };
   cross.addEventListener('click', (e) => {
-    // A click anywhere else in the overlay closes it.
-    e.stopPropagation();
-    removeOpen();
+    if (!strayClick(e)) removeOpen();
   });
 
   const onResize = (): void => {
@@ -284,6 +282,36 @@ export function openLightbox(options: Options): Lightbox {
     if (likes && e.key === ' ') e.preventDefault();
   };
 
+  // A press on the overlay closes the photo. It has to go down and come up on
+  // the overlay, without moving far. A click event would not do. On a touch
+  // screen the browser sends one after the tap that opened the photo, and it
+  // can land on the overlay, which closed the photo the moment it opened.
+  let press: { id: number; x: number; y: number } | null = null;
+  /** True once a pointer has gone down on the overlay. Until then a click is the end of the tap that opened the photo. */
+  let pressed = false;
+  const onDown = (e: PointerEvent): void => {
+    if (e.button !== 0) return;
+    pressed = true;
+    // A press on the hearts or the cross is theirs.
+    const onControl = e.target instanceof Element && e.target.closest('.likes, .remove');
+    press = onControl ? null : { id: e.pointerId, x: e.clientX, y: e.clientY };
+  };
+  const onUp = (e: PointerEvent): void => {
+    const p = press;
+    if (!p || e.pointerId !== p.id) return;
+    press = null;
+    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) <= TAP_SLOP) close();
+  };
+  const onCancel = (e: PointerEvent): void => {
+    if (press && e.pointerId === press.id) press = null;
+  };
+  /**
+   * True for a click on the hearts or the cross that no press on them led to:
+   * the click that follows the tap which opened or closed the photo. A click
+   * made with the keyboard has no pointer and counts.
+   */
+  const strayClick = (e: MouseEvent): boolean => closing || (!pressed && e.detail !== 0);
+
   let closing = false;
   const close = (): void => {
     if (closing) return;
@@ -308,7 +336,9 @@ export function openLightbox(options: Options): Lightbox {
   window.addEventListener('resize', onResize);
   window.addEventListener('keydown', onKey);
   window.addEventListener('keyup', onKeyUp);
-  root.addEventListener('click', close);
+  root.addEventListener('pointerdown', onDown);
+  root.addEventListener('pointerup', onUp);
+  root.addEventListener('pointercancel', onCancel);
 
   return {
     show: (next, dx, dy) => {
