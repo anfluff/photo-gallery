@@ -1,6 +1,6 @@
 # photo-gallery
 
-My fav photos, laid out on an endless mesh. Drag to move around, click a photo to open it, and use the arrow keys to move between open photos.
+My fav photos, laid out on an endless mesh. Drag to move around, click a photo to open it, and use the arrow keys to move between open photos. On a touch screen, swipe the open photo left, right, up or down.
 
 While you move, the address of the page keeps your position, like `#12.35,-4.2`. Send that address to someone and the mesh opens at the same spot for them. The two numbers count cells from the middle of the mesh, so the link works on a screen of any size. It points at a spot, not at a photo: after photos are added, removed or liked differently, other photos lie there.
 

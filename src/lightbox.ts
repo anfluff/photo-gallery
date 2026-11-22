@@ -1,7 +1,7 @@
 // Opens a photo by flying it from its cell to the centre of the screen. On the
 // mesh the photo is cropped to its cell, and the crop opens up during the
 // flight. While a photo is open, the arrow keys move to its
-// neighbour. In admin mode the hearts set how much it is liked, Space or L
+// neighbour, and so does a swipe on a touch screen. In admin mode the hearts set how much it is liked, Space or L
 // adds a like, the keys 0 to 3 set the likes, and the cross or Backspace
 // removes the photo.
 
@@ -21,7 +21,7 @@ interface Options {
   shot: Shot;
   /** Where the photo sits on the mesh, so the flight can start there. */
   home: Rect;
-  /** An arrow key asks for the neighbour in that direction. Null when there is none. */
+  /** An arrow key or a swipe asks for the neighbour in that direction. Null when there is none. */
   step: (dx: number, dy: number) => Shot | null;
   /** When given, the open photo has a row of hearts. */
   likes?: Likes | null;
@@ -45,8 +45,10 @@ export interface Lightbox {
 const EASE_OUT = 'cubic-bezier(0.16, 1, 0.3, 1)';
 const FLY_IN = { duration: 520, easing: EASE_OUT };
 const FLY_OUT = { duration: 380, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' };
-const SLIDE = 70; // px a photo travels when an arrow key swaps it
+const SLIDE = 70; // px a photo travels when an arrow key or a swipe swaps it
 const TAP_SLOP = 10; // px a pointer may travel between going down and coming up and still close the photo
+const SWIPE = 60; // px a finger has to drag the open photo to move on to its neighbour
+const FLICK = 0.5; // px per ms. A drag this fast moves on after 20 px.
 
 const ARROWS: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
@@ -286,7 +288,11 @@ export function openLightbox(options: Options): Lightbox {
   // the overlay, without moving far. A click event would not do. On a touch
   // screen the browser sends one after the tap that opened the photo, and it
   // can land on the overlay, which closed the photo the moment it opened.
-  let press: { id: number; x: number; y: number } | null = null;
+  //
+  // A finger can also drag the open photo sideways, up or down. The photo
+  // follows it along one axis, and letting go far enough moves on to the
+  // neighbour on the side the photo was dragged away from, as the arrow keys do.
+  let press: { id: number; x: number; y: number; t: number; touch: boolean; axis: 'x' | 'y' | null } | null = null;
   /** True once a pointer has gone down on the overlay. Until then a click is the end of the tap that opened the photo. */
   let pressed = false;
   const onDown = (e: PointerEvent): void => {
@@ -294,16 +300,53 @@ export function openLightbox(options: Options): Lightbox {
     pressed = true;
     // A press on the hearts or the cross is theirs.
     const onControl = e.target instanceof Element && e.target.closest('.likes, .remove');
-    press = onControl ? null : { id: e.pointerId, x: e.clientX, y: e.clientY };
+    press = onControl
+      ? null
+      : { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, touch: e.pointerType !== 'mouse', axis: null };
+  };
+  const onMove = (e: PointerEvent): void => {
+    const p = press;
+    if (!p || e.pointerId !== p.id || !p.touch || closing) return;
+    const x = e.clientX - p.x;
+    const y = e.clientY - p.y;
+    if (!p.axis) {
+      if (Math.hypot(x, y) <= TAP_SLOP) return;
+      p.axis = Math.abs(x) >= Math.abs(y) ? 'x' : 'y';
+    }
+    frame.style.translate = p.axis === 'x' ? `${x}px 0px` : `0px ${y}px`;
+  };
+  /** Lets a dragged photo go back to the middle. */
+  const springBack = (): void => {
+    const from = frame.style.translate;
+    if (!from) return;
+    frame.style.translate = '';
+    if (!still) frame.animate([{ translate: from }, { translate: '0px 0px' }], { duration: 260, easing: EASE_OUT });
   };
   const onUp = (e: PointerEvent): void => {
     const p = press;
     if (!p || e.pointerId !== p.id) return;
     press = null;
-    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) <= TAP_SLOP) close();
+    const x = e.clientX - p.x;
+    const y = e.clientY - p.y;
+    if (!p.axis) {
+      if (Math.hypot(x, y) <= TAP_SLOP) close();
+      return;
+    }
+    const far = p.axis === 'x' ? x : y;
+    const speed = Math.abs(far) / Math.max(1, e.timeStamp - p.t);
+    const swiped = Math.abs(far) > SWIPE || (speed > FLICK && Math.abs(far) > 2 * TAP_SLOP);
+    // The photo goes where the finger goes, so a swipe to the left brings in the neighbour on the right.
+    const dx = p.axis === 'x' ? -Math.sign(far) : 0;
+    const dy = p.axis === 'y' ? -Math.sign(far) : 0;
+    const next = swiped && !closing ? step(dx, dy) : null;
+    // The dragged photo keeps its shift, so it slides away from where the finger left it.
+    if (next) swapTo(next, dx, dy);
+    else springBack();
   };
   const onCancel = (e: PointerEvent): void => {
-    if (press && e.pointerId === press.id) press = null;
+    if (!press || e.pointerId !== press.id) return;
+    press = null;
+    springBack();
   };
   /**
    * True for a click on the hearts or the cross that no press on them led to:
@@ -337,6 +380,7 @@ export function openLightbox(options: Options): Lightbox {
   window.addEventListener('keydown', onKey);
   window.addEventListener('keyup', onKeyUp);
   root.addEventListener('pointerdown', onDown);
+  root.addEventListener('pointermove', onMove);
   root.addEventListener('pointerup', onUp);
   root.addEventListener('pointercancel', onCancel);
 
