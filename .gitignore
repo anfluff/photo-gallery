@@ -1,0 +1,9 @@
+node_modules
+dist
+.DS_Store
+
+# Processed photos are too large for git. Storage gets decided with deploy.
+public/photos
+
+# Scratch space for the import script
+.import-cache
