@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   CELL_ASPECT,
   cellIndex,
+  cellWidth,
   fit,
+  fullRows,
   meshCols,
   mod,
   nearestCopy,
@@ -183,5 +185,52 @@ describe('fit', () => {
   it('scales to the limiting side and keeps the aspect ratio', () => {
     expect(fit(400, 200, 100, 100)).toEqual({ w: 100, h: 50 });
     expect(fit(200, 400, 100, 100)).toEqual({ w: 50, h: 100 });
+  });
+});
+
+describe('fullRows', () => {
+  it('is one on a phone, however it is held, and two on larger windows', () => {
+    expect(fullRows(390, 750)).toBe(1);
+    expect(fullRows(844, 390)).toBe(1);
+    expect(fullRows(820, 1180)).toBe(2);
+    expect(fullRows(1470, 923)).toBe(2);
+  });
+});
+
+describe('cellWidth', () => {
+  /** How many rows and columns of the mesh a window shows. */
+  const shows = (vw: number, vh: number, gap = 0.02) => {
+    const w = cellWidth(vw, vh, gap);
+    return { rows: vh / (w * (CELL_ASPECT + gap)), cols: vw / (w * (1 + gap)) };
+  };
+
+  it('shows two rows and a part of the next ones on a laptop or a tablet', () => {
+    for (const [vw, vh] of [[1470, 923], [1280, 720], [1180, 820], [820, 1180]]) {
+      expect(shows(vw, vh).rows).toBeCloseTo(2.45, 5);
+    }
+  });
+
+  it('shows one photo and a part of its neighbours on a phone held upright', () => {
+    const { rows, cols } = shows(390, 750);
+    expect(cols).toBeCloseTo(1.45, 5);
+    expect(rows).toBeGreaterThan(1.45);
+    expect(rows).toBeLessThan(2.2);
+  });
+
+  it('shows one row and a part of the next ones on a phone on its side', () => {
+    const { rows, cols } = shows(844, 390);
+    expect(rows).toBeCloseTo(1.45, 5);
+    expect(cols).toBeGreaterThan(3);
+  });
+
+  it('keeps the rows when the spacing changes', () => {
+    expect(shows(1470, 923, 0)).toEqual({ rows: expect.closeTo(2.45, 5), cols: expect.any(Number) });
+    expect(shows(1470, 923, 0.5).rows).toBeCloseTo(2.45, 5);
+  });
+
+  it('shows more rows on a large display and never makes a cell too small', () => {
+    expect(cellWidth(2560, 1400, 0.02)).toBe(320);
+    expect(shows(2560, 1400).rows).toBeGreaterThan(2.45);
+    expect(cellWidth(100, 100, 0.02)).toBe(80);
   });
 });

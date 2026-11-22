@@ -18,8 +18,9 @@ import sharp from 'sharp';
 import { addPhotos, emptyGallery, serializeGallery, type Gallery, type Photo } from '../src/layout.ts';
 
 const FULL_EDGE = 2000;
-// A cell is at most 240 by 360 CSS pixels and the photo is cropped to fill it,
-// so the thumbnail has to cover twice that for sharp display on a 2x screen.
+// The photo is cropped to fill its cell. A thumbnail of this size is sharp on
+// a 2x screen up to a cell of 240 by 360 CSS pixels. Cells can be larger than
+// that, see cellWidth in src/torus.ts, and the thumbnail is then stretched.
 const THUMB_COVER = { width: 480, height: 720 };
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

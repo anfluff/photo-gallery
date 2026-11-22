@@ -13,6 +13,32 @@ export const mod = (n: number, m: number): number => ((n % m) + m) % m;
 /** A cell is one and a half times as tall as it is wide. Distances on the mesh are in cell widths. */
 export const CELL_ASPECT = 1.5;
 
+/** How much of the rows above and below the full ones a window shows, in rows, and the same for columns. */
+const PEEK = 0.45;
+/** A window narrower or lower than this many px is taken to be a phone. */
+const PHONE = 600;
+/** Cells do not get wider than this many px, so a large display shows more rows and not larger photos. */
+const MAX_CELL = 320;
+const MIN_CELL = 80;
+
+/** How many rows a window of the given size shows in full: one on a phone, two on anything larger. */
+export const fullRows = (vw: number, vh: number): number => (Math.min(vw, vh) < PHONE ? 1 : 2);
+
+/**
+ * The width of a cell in px for a window of the given size. `gap` is the
+ * space between cells as a share of the cell width.
+ *
+ * A window shows two rows in full and a part of the rows above and below. A
+ * phone shows one: held upright that is one photo with a part of its
+ * neighbours on every side, and on its side it is one row.
+ */
+export function cellWidth(vw: number, vh: number, gap: number): number {
+  const byHeight = vh / ((fullRows(vw, vh) + PEEK) * (CELL_ASPECT + gap));
+  // One column always fits in full, with a part of the columns next to it.
+  const byWidth = vw / ((1 + PEEK) * (1 + gap));
+  return Math.max(MIN_CELL, Math.min(byHeight, byWidth, MAX_CELL));
+}
+
 /** Squared distance between cells that are dc columns and dr rows apart, times 4 so it stays a whole number. */
 const span2 = (dc: number, dr: number): number => 4 * dc * dc + 9 * dr * dr;
 

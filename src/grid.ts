@@ -21,7 +21,7 @@ import {
   type Layout,
   type Mesh,
 } from './layout.ts';
-import { CELL_ASPECT, cellIndex, nearestCopy, visibleRange } from './torus.ts';
+import { CELL_ASPECT, cellIndex, cellWidth, fullRows, nearestCopy, visibleRange } from './torus.ts';
 import { formatPlace, parsePlace, type Place } from './place.ts';
 import { thumbUrl } from './urls.ts';
 
@@ -144,7 +144,11 @@ export class Grid {
     this.render();
   }
 
-  /** Goes to the middle of the mesh, the cell at column 0 and row 0. In a bounded mesh that is its start, at the top. */
+  /**
+   * Goes to the middle of the mesh, the cell at column 0 and row 0. A window
+   * that shows two rows in full gets that row and the one above it. In a
+   * bounded mesh the middle is its start, at the top.
+   */
   goToCentre(): void {
     this.settle();
     this.coasting = false;
@@ -153,7 +157,8 @@ export class Grid {
   }
 
   private centre(): void {
-    this.moveTo({ x: 0, y: 0 });
+    // With the middle row in the middle of a window of two rows, both rows next to it would be cut.
+    this.moveTo({ x: 0, y: fullRows(this.vw, this.vh) === 2 ? -0.5 : 0 });
     if (this.mesh.bounded) this.camY = -this.topPad;
   }
 
@@ -407,9 +412,10 @@ export class Grid {
   private measure(): void {
     this.vw = this.viewport.clientWidth;
     this.vh = this.viewport.clientHeight;
-    this.cellW = Math.round(clamp(this.vw / 6.5, 120, 240) * this.getSize() * this.zoom);
+    // The window sets the size, so it shows the same number of rows on every screen. The size setting scales that.
+    this.cellW = Math.round(cellWidth(this.vw, this.vh, this.getGap()) * this.getSize() * this.zoom);
     // Two thirds of the photos are 9:16 and a quarter are 3:4. A 2:3 cell sits between them.
-    this.cellH = Math.round(this.cellW * 1.5);
+    this.cellH = Math.round(this.cellW * CELL_ASPECT);
     this.gap = Math.round(this.cellW * this.getGap());
     this.stepX = this.cellW + this.gap;
     this.stepY = this.cellH + this.gap;
