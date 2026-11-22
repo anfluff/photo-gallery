@@ -60,6 +60,37 @@ A removed photo leaves an empty cell until the next save. Save writes the order,
 
 Save also deletes the image files of removed photos from `public/photos/`, and from then on Undo cannot bring them back. The import script skips removed photos. To restore one, delete its id from `removed` in `src/gallery.json` and run the import again.
 
+## Deploy
+
+The site is at https://photos.apraksin.xyz. A push to `main` deploys it. The workflow in `.github/workflows/deploy.yml` runs the tests, builds the site and copies `dist/` to the server. You can also start it by hand on the Actions page.
+
+The image files are not in git, so the workflow does not carry them. Copy them from your computer:
+
+```sh
+npm run upload
+```
+
+This sends `public/photos/` to the server and removes from the server the files that are no longer in it. After an import, upload first and push second, so the page never asks for an image that is not there yet. After removing photos in admin mode the order does not matter.
+
+### The server
+
+One nginx container serves the site. It runs on a DigitalOcean droplet behind the Traefik proxy that is already there, and Traefik gets the certificate. `deploy/docker-compose.yml` and `deploy/nginx.conf` are the copies of the two files in `/srv/apraksin/compose` on the server. The same container serves the budget tracker at budget.apraksin.xyz, which has its own repository and its own deploy.
+
+| On the server | What it holds | Who writes it |
+| --- | --- | --- |
+| `/srv/apraksin/photos/site` | the built site | the deploy workflow |
+| `/srv/apraksin/photos/images` | `thumb/` and `full/` | `npm run upload` |
+| `/srv/apraksin/compose` | the compose file and the nginx config | you, as root |
+
+To change the server config, edit the files in `deploy/`, copy them to `/srv/apraksin/compose` and run `docker compose up -d` there. After a change to `nginx.conf` alone, run `docker compose restart web`.
+
+The workflow logs in as the user `apraksin-deploy` with an SSH key that can only write files into `/srv/apraksin/photos/site`. It cannot open a shell or read anything. The repository holds two secrets for it:
+
+- `DEPLOY_SSH_KEY` is the private key. Its public half is in `/srv/apraksin/.ssh/authorized_keys` on the server.
+- `DEPLOY_KNOWN_HOSTS` is the host key of the server, as a `known_hosts` line. If the server is rebuilt, write the new one with `ssh-keyscan -t ed25519 photos.apraksin.xyz`.
+
+The name `photos.apraksin.xyz` is delegated to the DigitalOcean name servers by three NS records at the registrar, and its A record is in DigitalOcean DNS. Traefik proves ownership of the name through DigitalOcean DNS when it asks for a certificate, which is why the name lives there.
+
 ## Tests
 
 ```sh

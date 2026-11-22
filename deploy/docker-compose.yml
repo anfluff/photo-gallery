@@ -1,0 +1,39 @@
+# Serves photos.apraksin.xyz and budget.apraksin.xyz from one nginx container.
+# The proxy of this droplet (Traefik, from the Hemagon system stack) finds the
+# container by its labels and gets the certificates through DigitalOcean DNS,
+# which is why both names are delegated to DigitalOcean.
+#
+# This file lives in /srv/apraksin/compose on the server. To start or update
+# the container, run `docker compose up -d` there.
+name: apraksin
+
+services:
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /srv/apraksin/photos/site:/srv/photos/site:ro
+      - /srv/apraksin/photos/images:/srv/photos/media/photos:ro
+      - /srv/apraksin/budget/site:/srv/budget/site:ro
+      - /srv/apraksin/budget/auth:/srv/budget/auth:ro
+    networks:
+      - hemagon_network
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: hemagon_network
+      traefik.http.services.apraksin_web.loadbalancer.server.port: "80"
+      traefik.http.routers.apraksin_photos.rule: Host(`photos.apraksin.xyz`)
+      traefik.http.routers.apraksin_photos.entrypoints: webSecure
+      traefik.http.routers.apraksin_photos.tls.certresolver: doDNSChallenge
+      traefik.http.routers.apraksin_photos.middlewares: hstsHeader@file,secHeader@file
+      traefik.http.routers.apraksin_photos.service: apraksin_web
+      traefik.http.routers.apraksin_budget.rule: Host(`budget.apraksin.xyz`)
+      traefik.http.routers.apraksin_budget.entrypoints: webSecure
+      traefik.http.routers.apraksin_budget.tls.certresolver: doDNSChallenge
+      traefik.http.routers.apraksin_budget.middlewares: hstsHeader@file,secHeader@file
+      traefik.http.routers.apraksin_budget.service: apraksin_web
+
+networks:
+  hemagon_network:
+    external: true
