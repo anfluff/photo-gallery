@@ -305,6 +305,15 @@ body {
   -webkit-user-select: none;
 }
 
+/* On a touch screen the opened photo stays clear of every edge of the screen,
+   and of a notch. lightbox.ts fits the photo inside this padding. */
+@media (hover: none) {
+  .lightbox {
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+      max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+}
+
 .lightbox .backdrop {
   position: absolute;
   inset: 0;

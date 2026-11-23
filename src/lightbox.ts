@@ -94,14 +94,24 @@ function fly(
   return frame.animate([{ transform: from.transform }, { transform: to.transform }], timing);
 }
 
-/** The largest box for a photo that fits the window. A portrait photo runs from the top edge to the bottom edge. */
-function target(shot: Shot): Rect {
-  const size = fit(shot.w, shot.h, innerWidth, innerHeight);
-  return { left: (innerWidth - size.w) / 2, top: (innerHeight - size.h) / 2, width: size.w, height: size.h };
+/**
+ * The largest box for a photo that fits the overlay inside its padding. The
+ * stylesheet pads the overlay on a touch screen, so the photo stays clear of
+ * every edge there. With no padding a portrait photo runs from the top edge to
+ * the bottom edge. The overlay has to be in the document for its padding to be known.
+ */
+function target(shot: Shot, root: HTMLElement): Rect {
+  const style = getComputedStyle(root);
+  const left = parseFloat(style.paddingLeft) || 0;
+  const top = parseFloat(style.paddingTop) || 0;
+  const boxW = Math.max(1, innerWidth - left - (parseFloat(style.paddingRight) || 0));
+  const boxH = Math.max(1, innerHeight - top - (parseFloat(style.paddingBottom) || 0));
+  const size = fit(shot.w, shot.h, boxW, boxH);
+  return { left: left + (boxW - size.w) / 2, top: top + (boxH - size.h) / 2, width: size.w, height: size.h };
 }
 
-function place(frame: HTMLElement, shot: Shot): Rect {
-  const t = target(shot);
+function place(frame: HTMLElement, shot: Shot, root: HTMLElement): Rect {
+  const t = target(shot, root);
   frame.style.left = `${t.left}px`;
   frame.style.top = `${t.top}px`;
   frame.style.width = `${t.width}px`;
@@ -109,7 +119,7 @@ function place(frame: HTMLElement, shot: Shot): Rect {
   return t;
 }
 
-function makeFrame(shot: Shot): HTMLElement {
+function makeFrame(shot: Shot, root: HTMLElement): HTMLElement {
   const frame = document.createElement('div');
   frame.className = 'frame';
   // The thumbnail is already cached, so it shows at once. The full file fades
@@ -137,7 +147,7 @@ function makeFrame(shot: Shot): HTMLElement {
   aura.className = 'aura';
   aura.src = thumb.src;
   frame.append(aura, crop);
-  place(frame, shot);
+  place(frame, shot, root);
   return frame;
 }
 
@@ -147,10 +157,12 @@ export function openLightbox(options: Options): Lightbox {
 
   const root = document.createElement('div');
   root.className = 'lightbox';
+  // The overlay goes into the document first, so the frame can be fitted inside its padding.
+  document.body.append(root);
   const backdrop = document.createElement('div');
   backdrop.className = 'backdrop';
   let shot = first;
-  let frame = makeFrame(shot);
+  let frame = makeFrame(shot, root);
   const hearts = makeLikes();
   root.append(backdrop, frame);
   if (likes) root.append(hearts);
@@ -161,14 +173,13 @@ export function openLightbox(options: Options): Lightbox {
   cross.setAttribute('aria-label', 'Remove this photo');
   cross.innerHTML = CROSS_SVG;
   if (remove) root.append(cross);
-  document.body.append(root);
 
   /**
    * Tells the stylesheet where the open photo ends, so the cross and the hearts
    * sit in its corners as they do on the mesh.
    */
   const placeControls = (): void => {
-    const t = target(shot);
+    const t = target(shot, root);
     root.style.setProperty('--photo-top', `${t.top}px`);
     root.style.setProperty('--photo-right', `${innerWidth - t.left - t.width}px`);
     root.style.setProperty('--photo-bottom', `${innerHeight - t.top - t.height}px`);
@@ -194,7 +205,7 @@ export function openLightbox(options: Options): Lightbox {
   if (still) {
     root.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150 });
   } else {
-    fly(frame, inCell(home, target(shot)), OPEN, FLY_IN);
+    fly(frame, inCell(home, target(shot, root)), OPEN, FLY_IN);
     backdrop.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, easing: 'ease-out' });
   }
 
@@ -205,7 +216,7 @@ export function openLightbox(options: Options): Lightbox {
   const swapTo = (next: Shot, dx: number, dy: number, removed = false): void => {
     const old = frame;
     shot = next;
-    frame = makeFrame(shot);
+    frame = makeFrame(shot, root);
     root.append(frame);
     placeControls();
     showLike();
@@ -247,7 +258,7 @@ export function openLightbox(options: Options): Lightbox {
   });
 
   const onResize = (): void => {
-    place(frame, shot);
+    place(frame, shot, root);
     placeControls();
   };
   const onKey = (e: KeyboardEvent): void => {
@@ -370,7 +381,7 @@ export function openLightbox(options: Options): Lightbox {
     if (!still && back) {
       for (const el of [hearts, cross]) el.animate([{ opacity: 0 }], { duration: 150, fill: 'forwards' });
       backdrop.animate([{ opacity: 1 }, { opacity: 0 }], { ...FLY_OUT, fill: 'forwards' });
-      fly(frame, OPEN, inCell(back, target(shot)), { ...FLY_OUT, fill: 'forwards' }).finished.then(finish, finish);
+      fly(frame, OPEN, inCell(back, target(shot, root)), { ...FLY_OUT, fill: 'forwards' }).finished.then(finish, finish);
     } else {
       root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, fill: 'forwards' }).finished.then(finish, finish);
     }
