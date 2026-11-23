@@ -12,8 +12,7 @@ body {
   margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
-  /* grid.ts sets the colour from the gallery file, and the build writes it into the page so it is there from the first frame. */
-  background: var(--bg, #222);
+  /* The background colour is set in index.html, so the page has it before this stylesheet has loaded. */
   color: var(--ink, #eee);
   font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
 }

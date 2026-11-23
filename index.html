@@ -3,15 +3,27 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#222222" />
     <title>Photo gallery</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- The colour of the page is set here and not in the stylesheet, so the
+         page has it before the stylesheet has arrived on a slow connection.
+         grid.ts sets the colour from the gallery file, and the build writes it
+         into the page as well. -->
+    <style>
+      html,
+      body {
+        background: var(--bg, #222);
+      }
+    </style>
   </head>
   <body>
     <main id="viewport" aria-label="Photo gallery. Drag to move around.">
       <div id="stage"><div id="world"></div></div>
     </main>
-    <p id="hint" aria-hidden="true">Drag to explore</p>
+    <!-- Hidden until main.ts has drawn the mesh, so it does not show as bare text before the stylesheet has arrived. -->
+    <p id="hint" aria-hidden="true" hidden>Drag to explore</p>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

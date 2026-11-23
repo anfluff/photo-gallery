@@ -27,6 +27,8 @@ if (file.order.length === 0) {
   // The public page keeps its position in its address, so a link opens at the
   // same spot. Admin mode only keeps it for a reload.
   const grid = new Grid(viewport, world, mesh, admin ? 'session' : 'url');
+  // The page keeps the hint hidden until the mesh is there. Admin mode has no hint.
+  if (!admin) hint.hidden = false;
 
   grid.onPan = () => {
     hint.classList.add('gone');
