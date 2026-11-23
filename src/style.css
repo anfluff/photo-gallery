@@ -80,9 +80,35 @@ body {
   opacity: 1;
 }
 
-/* The photo that is open in the popup leaves its cell empty. */
+/* The photo that is open in the popup leaves its cell empty. So does a photo that admin mode drags. */
 .cell.away .photo {
   visibility: hidden;
+}
+
+/* What a cell shows while its photo is not in it. It sits behind the photo.
+   grid.ts sets the colours, which are white on a dark page and black on a light one. */
+.cell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  box-sizing: border-box;
+  border: 1px dashed transparent;
+  border-radius: var(--photo-radius, 0px);
+  transition: background-color 0.5s ease-out;
+  pointer-events: none;
+}
+
+/* A photo that is loading has its cell filled with a faint tint. grid.ts gives
+   every cell a strength of its own, from 0.5% to 2%. The tint fades as the
+   loaded photo fades in over it. */
+.cell:has(> .photo:not(.loaded))::before {
+  background-color: rgb(var(--fill-rgb, 255 255 255) / var(--shade, 0.01));
+}
+
+/* A photo that is open in the popup, or that admin mode drags, leaves a dashed line around its cell. */
+.cell.away::before {
+  border-color: var(--frame, rgba(255, 255, 255, 0.1));
 }
 
 /* The controls in the corners of a photo, which only admin mode has: the cross

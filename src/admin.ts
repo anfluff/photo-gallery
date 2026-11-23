@@ -124,7 +124,6 @@ const css = `
 .admin-panel input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
 .admin-panel input[type="color"]::-webkit-color-swatch { border: 1px solid #555; border-radius: 8px; }
 .cell.empty { box-sizing: border-box; border: 1px dashed #5a5a5a; border-radius: max(4px, var(--photo-radius, 0px)); }
-.cell.lifted .photo { opacity: 0.2; }
 .cell .remove { top: 6px; }
 .admin-chips {
   position: fixed; left: 14px; bottom: 14px; z-index: 20;
@@ -675,6 +674,8 @@ function dragPhoto(grid: Grid, down: PointerEvent, from: Hit, move: (from: numbe
     target = document.createElement('div');
     target.className = 'admin-target';
     document.body.append(target, ghost);
+    // The cell the photo came from keeps only its dashed frame, like the cell of an open photo.
+    grid.hideIndex(from.index);
     vp.classList.add('dragging');
     frame = requestAnimationFrame(loop);
   };
@@ -691,9 +692,6 @@ function dragPhoto(grid: Grid, down: PointerEvent, from: Hit, move: (from: numbe
     const dy = push(y, innerHeight);
     if (dx || dy) grid.panBy(dx, dy);
 
-    for (const el of vp.querySelectorAll(`.cell[data-index="${from.index}"]:not(.lifted)`)) {
-      el.classList.add('lifted');
-    }
     const over = grid.hitTest(x, y);
     const rect = grid.cellRect(over.col, over.row);
     if (target) {
@@ -728,12 +726,12 @@ function dragPhoto(grid: Grid, down: PointerEvent, from: Hit, move: (from: numbe
     ghost?.remove();
     target?.remove();
     vp.classList.remove('dragging');
-    for (const el of vp.querySelectorAll('.cell.lifted')) el.classList.remove('lifted');
 
     if (!lifted) {
       if (drop) grid.onPhotoClick?.(from);
       return;
     }
+    grid.hideIndex(null);
     if (!drop) return;
     const to = grid.hitTest(e.clientX, e.clientY).index;
     if (to !== from.index) move(from.index, to);

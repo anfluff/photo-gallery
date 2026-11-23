@@ -314,7 +314,10 @@ export class Grid {
     this.render();
   }
 
-  /** Hides the photo in one cell while it is shown in the popup. Null shows it again. */
+  /**
+   * Hides the photo in one cell while it is shown in the popup, or while admin
+   * mode drags it. The cell keeps a dashed frame. Null shows the photo again.
+   */
   hideIndex(index: number | null): void {
     this.hidden = index;
     for (const el of this.live.values()) el.classList.toggle('away', Number(el.dataset.index) === index);
@@ -450,6 +453,10 @@ export class Grid {
     const page = document.documentElement.style;
     page.setProperty('--bg', this.mesh.background);
     page.setProperty('--ink', light ? 'rgba(0, 0, 0, 0.75)' : 'rgba(255, 255, 255, 0.9)');
+    // The dashed line around the cell of a photo that is open or dragged.
+    page.setProperty('--frame', light ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)');
+    // The colour that fills the cell of a photo that is loading.
+    page.setProperty('--fill-rgb', light ? '0 0 0' : '255 255 255');
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', this.mesh.background);
   }
 
@@ -872,6 +879,8 @@ export class Grid {
     el.style.height = `${this.cellH}px`;
     this.place(el, col, row);
     if (id) {
+      // How strong the tint of the cell is while its photo loads: from 0.5% to 2%, at random.
+      el.style.setProperty('--shade', (0.005 + Math.random() * 0.015).toFixed(4));
       const img = new Image();
       img.className = 'photo';
       img.alt = '';
